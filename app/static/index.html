@@ -12,24 +12,23 @@
       <div class="brand">
         <div class="logo">🖼️</div>
         <div>
-          <h1>Amazon Photos → Google Fotos</h1>
-          <p class="subtitle">Baixe todas as fotos e vídeos da Amazon de uma vez e migre para o álbum <strong>Porta Retrato</strong> sem duplicatas.</p>
+          <h1>Baixador Amazon Photos → Google Fotos</h1>
+          <p class="subtitle">Entre apenas com seu e-mail e senha da Amazon para baixar todas as fotos e vídeos de uma vez e enviar ao álbum <strong>Porta Retrato</strong>.</p>
         </div>
       </div>
-      <span id="global-badge" class="badge badge-idle">Pronto</span>
+      <span id="amazon-badge" class="badge badge-idle">Pronto</span>
     </header>
 
     <main class="grid">
-      <!-- Passo 1: Baixar tudo do Amazon Photos de uma vez -->
+      <!-- Passo 1: Login e download do Amazon Photos -->
       <section class="card card-full">
         <div class="card-header">
           <span class="step-num">1</span>
-          <h2>Baixar todas as fotos e vídeos do Amazon Photos de uma vez</h2>
-          <span id="amazon-badge" class="badge badge-idle">Pronto</span>
+          <h2>Entrar na Amazon e baixar todas as fotos e vídeos</h2>
         </div>
 
         <p class="hint">
-          Entre com o <strong>e-mail e a senha da sua conta Amazon</strong> e clique em baixar. Toda a sua biblioteca (fotos e vídeos originais) é baixada em paralelo, com validação MD5, sem duplicatas e com opção de pausar/retomar. Sua senha não é salva — apenas a sessão de login fica guardada neste computador.
+          Digite seu <strong>e-mail e senha da Amazon</strong>. O app baixa todas as fotos e vídeos originais em paralelo, valida cada arquivo (MD5), evita duplicatas e permite pausar/retomar. Sua senha não é salva.
         </p>
 
         <!-- Login com e-mail e senha -->
@@ -86,10 +85,36 @@
         </div>
         <p id="amazon-login-message" class="status-line"></p>
 
+        <!-- Destino e ações de download -->
+        <div class="field">
+          <label for="amazon-output-dir">Pasta onde salvar as fotos (opcional — deixe em branco para usar a padrão)</label>
+          <input type="text" id="amazon-output-dir" placeholder="Ex: /home/voce/AmazonPhotos ou C:\Fotos\Amazon" />
+        </div>
+
         <div class="row actions">
           <button id="btn-amazon-preview" class="btn btn-secondary">🔍 Contar Biblioteca (Prévia)</button>
           <button id="btn-amazon-download" class="btn btn-primary">⬇️ Baixar Todas as Fotos e Vídeos</button>
           <button id="btn-amazon-stop" class="btn btn-danger hidden">⏸️ Pausar Download</button>
+        </div>
+
+        <p id="amazon-message" class="status-line"></p>
+
+        <!-- Progresso e log ao vivo -->
+        <div id="amazon-progress-wrap" class="amazon-progress hidden">
+          <div class="stats stats-4">
+            <div class="stat"><span class="stat-label">Encontrados</span><strong id="amz-found">0</strong></div>
+            <div class="stat stat-ok"><span class="stat-label">Baixados</span><strong id="amz-done">0</strong></div>
+            <div class="stat stat-err"><span class="stat-label">Falhas</span><strong id="amz-failed">0</strong></div>
+            <div class="stat"><span class="stat-label">Volume</span><strong id="amz-size">0 MB</strong></div>
+          </div>
+          <div class="progress-track">
+            <div id="amz-progress-bar" class="progress-bar" style="width: 0%"></div>
+          </div>
+          <div class="progress-meta">
+            <span id="amz-progress-text">0%</span>
+            <span id="amz-runtime-msg"></span>
+          </div>
+          <pre id="amz-log-box" class="log-box"></pre>
         </div>
 
         <details class="guide">
@@ -101,7 +126,7 @@
               e faça login na sua conta Amazon.
             </li>
             <li>Pressione <strong>F12</strong> (ou <em>Cmd+Option+I</em> no Mac) → aba <strong>Application</strong> (Chrome/Edge) ou <strong>Storage</strong> (Firefox) → <strong>Cookies</strong> → <code>https://www.amazon.com.br</code>.</li>
-            <li>Copie os valores dos cookies <code>session-id</code>, <code>ubid-acbbr</code> (ou <code>ubid-main</code> se usar amazon.com) e <code>at-acbbr</code> (ou <code>at-main</code>) nos campos abaixo, ou carregue um arquivo <code>cookies.json</code>. Se preenchidos, eles têm prioridade sobre o login.</li>
+            <li>Copie os valores de <code>session-id</code>, <code>ubid-acbbr</code> e <code>at-acbbr</code> (ou carregue <code>cookies.json</code>). Se preenchidos, eles têm prioridade sobre o login.</li>
           </ol>
           <div class="amazon-grid amazon-grid-3">
             <div class="field">
@@ -122,180 +147,60 @@
             <span>📄 Carregar cookies.json</span>
           </label>
         </details>
-
-        <div id="amazon-progress-wrap" class="amazon-progress hidden">
-          <div class="stats stats-4">
-            <div class="stat"><span class="stat-label">Encontrados</span><strong id="amz-found">0</strong></div>
-            <div class="stat stat-ok"><span class="stat-label">Baixados</span><strong id="amz-done">0</strong></div>
-            <div class="stat stat-err"><span class="stat-label">Falhas</span><strong id="amz-failed">0</strong></div>
-            <div class="stat"><span class="stat-label">Volume</span><strong id="amz-size">0 MB</strong></div>
-          </div>
-          <div class="progress-track">
-            <div id="amz-progress-bar" class="progress-bar" style="width: 0%"></div>
-          </div>
-          <div class="progress-meta">
-            <span id="amz-progress-text">0%</span>
-            <span id="amz-runtime-msg"></span>
-          </div>
-        </div>
-        <p id="amazon-message" class="status-line"></p>
       </section>
 
-      <!-- Passo 2: Google OAuth -->
-      <section class="card">
+      <!-- Passo 2: Enviar para o Google Fotos sem credentials.json -->
+      <section class="card card-full">
         <div class="card-header">
           <span class="step-num">2</span>
-          <h2>Conectar ao Google Fotos</h2>
-          <span id="auth-badge" class="badge badge-warn">Desconectado</span>
+          <h2>Enviar as fotos baixadas para o Google Fotos (sem precisar de Google Cloud)</h2>
         </div>
 
         <p class="hint">
-          Carregue o arquivo <code>credentials.json</code> (OAuth App para Computador) do Google Cloud e autorize sua conta Google.
+          O Google Fotos não aceita login por e-mail/senha em aplicativos externos. Assim que o download terminar, suas fotos estarão prontas na pasta abaixo — você envia direto com a sua conta Google já logada no navegador ou no computador:
         </p>
 
-        <details class="guide">
-          <summary>Como gerar o credentials.json em 2 minutos</summary>
-          <ol>
-            <li>
-              Abra <code>https://console.cloud.google.com/</code> em uma <strong>nova aba do navegador</strong>
-              <button type="button" class="btn-mini" data-copy="https://console.cloud.google.com/">📋 Copiar link</button>
-              e crie um projeto (ex: <em>Migrador Fotos</em>).
-            </li>
-            <li>Em <strong>APIs e Serviços → Biblioteca</strong>, ative a <strong>Photos Library API</strong>.</li>
-            <li>Em <strong>Tela de permissão OAuth</strong>, escolha <em>Externo</em> e adicione seu e-mail em <strong>Usuários de teste</strong>.</li>
-            <li>Em <strong>Credenciais → Criar credenciais → ID do cliente OAuth</strong>, escolha <strong>App para computador</strong> e baixe o JSON.</li>
-          </ol>
-        </details>
-
-        <div class="row">
-          <label class="file-btn">
-            <input type="file" id="credentials-file" accept=".json" />
-            <span>📄 Carregar credentials.json</span>
-          </label>
-          <button id="btn-auth-url" class="btn btn-primary" disabled>🔑 Autorizar Google</button>
-          <button id="btn-disconnect" class="btn btn-ghost hidden">Desconectar</button>
-        </div>
-
-        <div id="oauth-code-box" class="oauth-box hidden">
-          <p class="hint">
-            <strong>1.</strong> Copie o link abaixo e abra em uma <strong>nova aba do seu navegador</strong> (o Google bloqueia login dentro de janelas embutidas):
-          </p>
-          <div class="row" style="margin-bottom: 10px;">
-            <input type="text" id="oauth-url-display" class="input-inline" readonly />
-            <button type="button" id="btn-copy-oauth" class="btn btn-secondary">📋 Copiar Link</button>
-          </div>
-          <p class="hint">
-            <strong>2.</strong> Após autorizar, copie a URL da barra de endereços (<code>http://localhost/?code=...</code>) e cole abaixo:
-          </p>
-          <div class="row">
-            <input type="text" id="oauth-code-input" class="input-inline" placeholder="Cole aqui a URL completa ou o código..." />
-            <button id="btn-exchange-code" class="btn btn-primary">Confirmar</button>
-          </div>
-        </div>
-
-        <p id="auth-message" class="status-line"></p>
-      </section>
-
-      <!-- Passo 3: Origem e Álbum -->
-      <section class="card">
-        <div class="card-header">
-          <span class="step-num">3</span>
-          <h2>Enviar para o Google Fotos</h2>
-        </div>
-
-        <div id="dropzone" class="dropzone">
-          <input type="file" id="media-upload-input" multiple accept=".zip,image/*,video/*" />
-          <div class="dropzone-icon">☁️⬆️</div>
-          <p><strong>Arraste arquivos .zip ou fotos aqui (opcional)</strong></p>
-          <small>Se você baixou pelo Passo 1 acima, a pasta já será preenchida automaticamente.</small>
-        </div>
-
-        <div class="field" style="margin-top: 12px;">
-          <label for="source-path">Pasta de origem (preenchida automaticamente após o Passo 1)</label>
-          <input
-            type="text"
-            id="source-path"
-            placeholder="Ex: data/amazon_downloads ou caminho local..."
-          />
-        </div>
-
-        <div class="field">
-          <label for="album-name">Álbum de destino no Google Fotos</label>
-          <input type="text" id="album-name" value="Porta Retrato" />
-        </div>
-
-        <label class="checkbox">
-          <input type="checkbox" id="retry-failed" />
-          <span>Tentar reenviar arquivos que falharam anteriormente</span>
-        </label>
-
-        <div class="row actions">
-          <button id="btn-scan" class="btn btn-secondary">🔍 Analisar (Prévia)</button>
-          <button id="btn-start" class="btn btn-primary">🚀 Iniciar Migração</button>
-          <button id="btn-stop" class="btn btn-danger hidden">⏸️ Pausar</button>
-        </div>
-        <p id="action-message" class="status-line"></p>
-      </section>
-
-      <!-- Painel de Progresso -->
-      <section class="card card-full">
-        <div class="card-header">
-          <span class="step-num">4</span>
-          <h2>Progresso da Migração para o Google Fotos</h2>
-        </div>
-
-        <div class="stats">
-          <div class="stat">
-            <span class="stat-label">Total</span>
-            <strong id="stat-total">0</strong>
-          </div>
-          <div class="stat stat-ok">
-            <span class="stat-label">Enviadas</span>
-            <strong id="stat-uploaded">0</strong>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Pendentes</span>
-            <strong id="stat-pending">0</strong>
-          </div>
-          <div class="stat stat-err">
-            <span class="stat-label">Falhas</span>
-            <strong id="stat-failed">0</strong>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Tamanho</span>
-            <strong id="stat-size">0 MB</strong>
-          </div>
-        </div>
-
-        <div class="progress-track">
-          <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
-        </div>
-        <div class="progress-meta">
-          <span id="progress-text">0% concluído</span>
-          <span id="runtime-msg">Pronto para iniciar.</span>
-        </div>
-
-        <div class="split">
-          <div>
-            <h3>Log em tempo real</h3>
-            <pre id="log-box" class="log-box">Aguardando início...</pre>
-          </div>
-          <div>
-            <h3>Últimos arquivos processados</h3>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Arquivo</th>
-                    <th>Tamanho</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody id="recent-tbody">
-                  <tr><td colspan="3" class="muted">Nenhum arquivo listado ainda.</td></tr>
-                </tbody>
-              </table>
+        <div class="folder-box">
+          <div class="field">
+            <label for="downloaded-folder-path">Pasta das fotos baixadas</label>
+            <div class="input-inline">
+              <input type="text" id="downloaded-folder-path" readonly value="data/amazon_downloads" />
+              <button type="button" id="btn-copy-folder" class="btn btn-secondary">📋 Copiar caminho</button>
+              <button type="button" id="btn-open-folder" class="btn btn-secondary">📂 Abrir pasta</button>
             </div>
+          </div>
+          <p id="folder-message" class="status-line"></p>
+        </div>
+
+        <div class="two-cols">
+          <div class="option-box">
+            <h3>🌐 Opção A — Pelo navegador (mais rápida)</h3>
+            <ol>
+              <li>
+                Abra o Google Fotos com sua conta normal:
+                <div class="row actions" style="margin-top: 8px;">
+                  <a class="btn btn-primary" href="https://photos.google.com/albums" target="_blank" rel="noopener noreferrer">Abrir Google Fotos</a>
+                  <button type="button" class="btn btn-secondary" data-copy="https://photos.google.com/albums">📋 Copiar link</button>
+                </div>
+              </li>
+              <li>Clique em <strong>Criar álbum</strong> e dê o nome <strong>Porta Retrato</strong> (ou abra o álbum já existente).</li>
+              <li>Clique em <strong>Adicionar fotos → Selecionar do computador</strong> (ou arraste os arquivos da pasta baixada para a janela).</li>
+            </ol>
+          </div>
+
+          <div class="option-box">
+            <h3>☁️ Opção B — Automático (ideal para milhares de fotos)</h3>
+            <ol>
+              <li>
+                Instale o app oficial <strong>Google Drive para computador</strong> (login normal com sua conta Google):
+                <div class="row actions" style="margin-top: 8px;">
+                  <a class="btn btn-secondary" href="https://www.google.com/drive/download/" target="_blank" rel="noopener noreferrer">Baixar Google Drive</a>
+                  <button type="button" class="btn btn-secondary" data-copy="https://www.google.com/drive/download/">📋 Copiar link</button>
+                </div>
+              </li>
+              <li>Nas preferências do app, adicione a pasta das fotos baixadas e marque <strong>Fazer backup no Google Fotos</strong>.</li>
+              <li>O envio acontece em segundo plano automaticamente, com retomada se a internet cair.</li>
+            </ol>
           </div>
         </div>
       </section>

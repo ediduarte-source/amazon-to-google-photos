@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import shutil
+import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -306,6 +309,31 @@ def create_app(
     @app.get("/api/amazon/download/status")
     def amazon_download_status() -> dict:
         return amazon_downloader.get_status()
+
+    @app.post("/api/amazon/open-folder")
+    def open_amazon_folder() -> dict:
+        folder = Path(amazon_downloader.get_status()["output_dir"]).expanduser().resolve()
+        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            if sys.platform == "win32":
+                os.startfile(str(folder))  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(folder)])
+            else:
+                if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+                    return {
+                        "ok": False,
+                        "path": str(folder),
+                        "message": f"Pasta salva em: {folder} (sem janela gráfica neste ambiente).",
+                    }
+                subprocess.Popen(["xdg-open", str(folder)])
+        except Exception as exc:
+            return {
+                "ok": False,
+                "path": str(folder),
+                "message": f"Não foi possível abrir automaticamente ({exc}). Caminho: {folder}",
+            }
+        return {"ok": True, "path": str(folder), "message": f"Pasta aberta: {folder}"}
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     return app
