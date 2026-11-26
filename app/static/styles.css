@@ -209,6 +209,7 @@ body {
   margin-bottom: 5px;
 }
 .field input[type="text"],
+.field input[type="email"],
 .field input[type="password"],
 .field select {
   width: 100%;
@@ -226,6 +227,26 @@ body {
   gap: 12px;
   margin-bottom: 12px;
 }
+.amazon-grid-3 { grid-template-columns: 1fr 1.5fr 1.5fr; }
+
+.otp-box {
+  margin: 4px 0 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.otp-box .row { align-items: flex-end; }
+.otp-box .field { flex: 1; margin-bottom: 0; }
+
+.session-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  font-size: 0.95rem;
+}
+.actions + .guide { margin-top: 16px; }
 
 .amazon-progress {
   margin-top: 16px;

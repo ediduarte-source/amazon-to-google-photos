@@ -16,6 +16,7 @@ from app.amazon_downloader import (
     AmazonLibraryDownloader,
     normalize_cookies,
 )
+from app.amazon_login import AmazonLoginManager
 from app.config import (
     DATA_DIR,
     DEFAULT_ALBUM_NAME,
@@ -48,7 +49,7 @@ class AuthCodeRequest(BaseModel):
 
 
 class AmazonDownloadStartRequest(BaseModel):
-    domain: str = Field(default="com.br")
+    domain: str | None = None
     session_id: str | None = None
     ubid: str | None = None
     at_token: str | None = None
@@ -60,6 +61,17 @@ class AmazonDownloadStartRequest(BaseModel):
     dry_run: bool = False
 
 
+class AmazonLoginRequest(BaseModel):
+    email: str = Field(..., min_length=3)
+    password: str = Field(..., min_length=1)
+    domain: str = Field(default="com.br")
+    show_browser: bool = False
+
+
+class AmazonOtpRequest(BaseModel):
+    code: str = Field(..., min_length=1)
+
+
 def create_app(
     *,
     db_path: Path = DEFAULT_DB_PATH,
@@ -68,8 +80,9 @@ def create_app(
     extract_dir: Path = DEFAULT_EXTRACT_DIR,
     uploads_dir: Path | None = None,
     amazon_download_dir: Path = DEFAULT_AMAZON_DOWNLOAD_DIR,
+    amazon_login: AmazonLoginManager | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="Amazon Photos → Google Fotos (Porta Retrato)", version="1.2.0")
+    app = FastAPI(title="Amazon Photos → Google Fotos (Porta Retrato)", version="1.3.0")
 
     upload_root = uploads_dir or (DATA_DIR / "uploads")
     upload_root.mkdir(parents=True, exist_ok=True)
@@ -78,6 +91,7 @@ def create_app(
     google_client = GooglePhotosClient(credentials_path=credentials_path, token_path=token_path)
     migrator = PhotoMigrator(state_store, google_client, extract_dir=extract_dir)
     amazon_downloader = AmazonLibraryDownloader(default_output_dir=amazon_download_dir)
+    amazon_login = amazon_login or AmazonLoginManager()
 
     oauth_lock = threading.Lock()
     oauth_state = {"in_progress": False, "last_error": None}
@@ -217,19 +231,61 @@ def create_app(
     def migration_status(album_name: str | None = None) -> dict:
         return migrator.get_status(album_name)
 
+    @app.post("/api/amazon/login")
+    def amazon_login_start(req: AmazonLoginRequest) -> dict:
+        try:
+            amazon_login.start(
+                req.email, req.password, domain=req.domain, show_browser=req.show_browser
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"ok": True, "status": amazon_login.get_status()}
+
+    @app.post("/api/amazon/login/otp")
+    def amazon_login_otp(req: AmazonOtpRequest) -> dict:
+        try:
+            amazon_login.submit_otp(req.code)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"ok": True, "status": amazon_login.get_status()}
+
+    @app.get("/api/amazon/login/status")
+    def amazon_login_status() -> dict:
+        return amazon_login.get_status()
+
+    @app.post("/api/amazon/logout")
+    def amazon_logout() -> dict:
+        amazon_login.logout()
+        return {"ok": True, "status": amazon_login.get_status()}
+
     @app.post("/api/amazon/download/start")
     def start_amazon_download(req: AmazonDownloadStartRequest) -> dict:
+        manual = any([req.cookies_json, req.session_id, req.ubid, req.at_token])
         try:
-            cookies = normalize_cookies(
-                cookies_json=req.cookies_json,
-                session_id=req.session_id,
-                ubid=req.ubid,
-                at_token=req.at_token,
-                domain=req.domain,
-            )
+            if manual:
+                domain = req.domain
+                cookies = normalize_cookies(
+                    cookies_json=req.cookies_json,
+                    session_id=req.session_id,
+                    ubid=req.ubid,
+                    at_token=req.at_token,
+                    domain=domain or "com.br",
+                )
+            else:
+                session = amazon_login.get_session()
+                if not session:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Entre na sua conta Amazon (e-mail e senha) antes de baixar as fotos.",
+                    )
+                cookies, domain = session
             amazon_downloader.start(
                 cookies,
-                domain=req.domain,
+                domain=domain,
                 output_dir=req.output_dir,
                 workers=req.workers,
                 limit=req.limit,

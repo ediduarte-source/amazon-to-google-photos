@@ -322,8 +322,8 @@ class AmazonLibraryDownloader:
                 resp = client.get(url, params=BASE_PARAMS | params)
                 if resp.status_code in (401, 403):
                     raise AmazonAuthError(
-                        f"A Amazon rejeitou os cookies (HTTP {resp.status_code}). "
-                        "Faça login novamente no Amazon Photos no navegador e copie cookies atualizados."
+                        f"A Amazon recusou a sessão (HTTP {resp.status_code}). "
+                        "Sua sessão expirou: clique em 'Sair' e entre novamente com e-mail e senha."
                     )
                 resp.raise_for_status()
                 return resp.json()
@@ -529,7 +529,7 @@ class AmazonLibraryDownloader:
                     if auth_error_msg:
                         self.status.state = "error"
                         self._log(
-                            "Cookies expiraram durante o download. Copie cookies novos e retome "
+                            "A sessão da Amazon expirou durante o download. Entre novamente com e-mail e senha e retome "
                             "(os arquivos já baixados serão mantidos)."
                         )
                     elif self._stop_event.is_set():

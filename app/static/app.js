@@ -306,7 +306,98 @@ $("amazon-cookies-file").addEventListener("change", async (ev) => {
   $("amazon-message").textContent = `Arquivo '${file.name}' carregado! Clique em 'Contar Biblioteca' ou 'Baixar Todas as Fotos e Vídeos'.`;
 });
 
+// ---- Login Amazon com e-mail e senha ----
+let amazonLoggedIn = false;
+
+async function amazonLogin() {
+  const email = $("amazon-email").value.trim();
+  const password = $("amazon-password").value;
+  if (!email || !password) {
+    $("amazon-login-message").textContent = "Informe o e-mail e a senha da sua conta Amazon.";
+    return;
+  }
+  $("btn-amazon-login").disabled = true;
+  $("amazon-login-message").textContent = "Entrando na Amazon...";
+  const resp = await fetch("/api/amazon/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email,
+      password,
+      domain: $("amazon-domain").value,
+      show_browser: $("amazon-show-browser").checked,
+    }),
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    $("amazon-login-message").textContent = `Erro: ${data.detail}`;
+    $("btn-amazon-login").disabled = false;
+    return;
+  }
+  await refreshAmazonLogin();
+}
+
+$("btn-amazon-login").addEventListener("click", amazonLogin);
+$("amazon-password").addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") amazonLogin();
+});
+
+async function submitAmazonOtp() {
+  const code = $("amazon-otp").value.trim();
+  if (!code) return;
+  const resp = await fetch("/api/amazon/login/otp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  const data = await resp.json();
+  $("amazon-login-message").textContent = resp.ok ? "Código enviado. Verificando..." : `Erro: ${data.detail}`;
+  $("amazon-otp").value = "";
+  await refreshAmazonLogin();
+}
+
+$("btn-amazon-otp").addEventListener("click", submitAmazonOtp);
+$("amazon-otp").addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") submitAmazonOtp();
+});
+
+$("btn-amazon-logout").addEventListener("click", async () => {
+  await fetch("/api/amazon/logout", { method: "POST" });
+  await refreshAmazonLogin();
+});
+
+async function refreshAmazonLogin() {
+  const resp = await fetch("/api/amazon/login/status");
+  const data = await resp.json();
+  amazonLoggedIn = data.logged_in;
+
+  $("amazon-login-box").classList.toggle("hidden", data.logged_in);
+  $("amazon-session-box").classList.toggle("hidden", !data.logged_in);
+  $("amazon-otp-box").classList.toggle("hidden", data.state !== "need_otp");
+  $("btn-amazon-login").disabled = data.in_progress;
+  if (data.logged_in) {
+    $("amazon-session-email").textContent = `${data.email || "sua conta"} (amazon.${data.domain})`;
+    $("amazon-password").value = "";
+  }
+  $("amazon-login-message").textContent =
+    data.state === "idle" || data.logged_in ? "" : data.message || "";
+}
+
+function hasManualCookies() {
+  return Boolean(
+    uploadedCookiesJson ||
+      $("amazon-session-id").value.trim() ||
+      $("amazon-ubid").value.trim() ||
+      $("amazon-at").value.trim()
+  );
+}
+
 async function startAmazonDownload(dryRun) {
+  if (!amazonLoggedIn && !hasManualCookies()) {
+    $("amazon-message").textContent = "Entre primeiro com o e-mail e a senha da sua conta Amazon.";
+    $("amazon-email").focus();
+    return;
+  }
   const payload = {
     domain: $("amazon-domain").value,
     session_id: $("amazon-session-id").value.trim() || null,
@@ -385,8 +476,10 @@ async function refreshAmazonStatus() {
 refreshAuth();
 refreshMigrationStatus();
 refreshAmazonStatus();
+refreshAmazonLogin();
 setInterval(() => {
   refreshAuth();
   refreshMigrationStatus();
   refreshAmazonStatus();
+  refreshAmazonLogin();
 }, 2000);

@@ -29,11 +29,71 @@
         </div>
 
         <p class="hint">
-          Baixa toda a sua biblioteca (fotos e vídeos originais) em paralelo, valida o checksum MD5, ignora duplicatas e permite pausar/retomar. Ao concluir, a pasta é preenchida automaticamente para migração no Google Fotos.
+          Entre com o <strong>e-mail e a senha da sua conta Amazon</strong> e clique em baixar. Toda a sua biblioteca (fotos e vídeos originais) é baixada em paralelo, com validação MD5, sem duplicatas e com opção de pausar/retomar. Sua senha não é salva — apenas a sessão de login fica guardada neste computador.
         </p>
 
+        <!-- Login com e-mail e senha -->
+        <div id="amazon-login-box">
+          <div class="amazon-grid amazon-grid-3">
+            <div class="field">
+              <label for="amazon-domain">Site da Amazon</label>
+              <select id="amazon-domain">
+                <option value="com.br" selected>Brasil (amazon.com.br)</option>
+                <option value="com">Estados Unidos (amazon.com)</option>
+                <option value="co.uk">Reino Unido (amazon.co.uk)</option>
+                <option value="de">Alemanha (amazon.de)</option>
+                <option value="es">Espanha (amazon.es)</option>
+                <option value="fr">França (amazon.fr)</option>
+                <option value="it">Itália (amazon.it)</option>
+                <option value="ca">Canadá (amazon.ca)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="amazon-email">E-mail (ou celular) da Amazon</label>
+              <input type="email" id="amazon-email" autocomplete="username" placeholder="voce@exemplo.com" />
+            </div>
+            <div class="field">
+              <label for="amazon-password">Senha da Amazon</label>
+              <input type="password" id="amazon-password" autocomplete="current-password" placeholder="Sua senha" />
+            </div>
+          </div>
+          <label class="checkbox">
+            <input type="checkbox" id="amazon-show-browser" />
+            <span>Mostrar a janela do navegador durante o login (útil se a Amazon pedir verificação de segurança)</span>
+          </label>
+          <div class="row actions">
+            <button id="btn-amazon-login" class="btn btn-primary">🔐 Entrar na Amazon</button>
+          </div>
+        </div>
+
+        <!-- Código de verificação em duas etapas -->
+        <div id="amazon-otp-box" class="otp-box hidden">
+          <div class="row">
+            <div class="field">
+              <label for="amazon-otp">Código de verificação enviado pela Amazon</label>
+              <input type="text" id="amazon-otp" inputmode="numeric" autocomplete="one-time-code" placeholder="Ex: 123456" />
+            </div>
+            <button id="btn-amazon-otp" class="btn btn-primary">Confirmar código</button>
+          </div>
+        </div>
+
+        <!-- Sessão ativa -->
+        <div id="amazon-session-box" class="hidden">
+          <p class="session-line">
+            ✅ Conectado à Amazon como <strong id="amazon-session-email"></strong>
+            <button type="button" id="btn-amazon-logout" class="btn-mini">Sair</button>
+          </p>
+        </div>
+        <p id="amazon-login-message" class="status-line"></p>
+
+        <div class="row actions">
+          <button id="btn-amazon-preview" class="btn btn-secondary">🔍 Contar Biblioteca (Prévia)</button>
+          <button id="btn-amazon-download" class="btn btn-primary">⬇️ Baixar Todas as Fotos e Vídeos</button>
+          <button id="btn-amazon-stop" class="btn btn-danger hidden">⏸️ Pausar Download</button>
+        </div>
+
         <details class="guide">
-          <summary>Como copiar os 3 cookies da sua sessão do Amazon Photos (1 minuto)</summary>
+          <summary>Avançado: usar cookies da sessão manualmente (em vez de e-mail e senha)</summary>
           <ol>
             <li>
               Abra <code>https://www.amazon.com.br/photos</code> em uma <strong>nova aba do navegador</strong>
@@ -41,47 +101,27 @@
               e faça login na sua conta Amazon.
             </li>
             <li>Pressione <strong>F12</strong> (ou <em>Cmd+Option+I</em> no Mac) → aba <strong>Application</strong> (Chrome/Edge) ou <strong>Storage</strong> (Firefox) → <strong>Cookies</strong> → <code>https://www.amazon.com.br</code>.</li>
-            <li>Copie os valores dos cookies <code>session-id</code>, <code>ubid-acbbr</code> (ou <code>ubid-main</code> se usar amazon.com) e <code>at-acbbr</code> (ou <code>at-main</code>) nos campos abaixo, ou carregue um arquivo <code>cookies.json</code>.</li>
+            <li>Copie os valores dos cookies <code>session-id</code>, <code>ubid-acbbr</code> (ou <code>ubid-main</code> se usar amazon.com) e <code>at-acbbr</code> (ou <code>at-main</code>) nos campos abaixo, ou carregue um arquivo <code>cookies.json</code>. Se preenchidos, eles têm prioridade sobre o login.</li>
           </ol>
-        </details>
-
-        <div class="amazon-grid">
-          <div class="field">
-            <label for="amazon-domain">Site da Amazon</label>
-            <select id="amazon-domain">
-              <option value="com.br" selected>Brasil (amazon.com.br)</option>
-              <option value="com">Estados Unidos (amazon.com)</option>
-              <option value="co.uk">Reino Unido (amazon.co.uk)</option>
-              <option value="de">Alemanha (amazon.de)</option>
-              <option value="es">Espanha (amazon.es)</option>
-              <option value="fr">França (amazon.fr)</option>
-              <option value="it">Itália (amazon.it)</option>
-              <option value="ca">Canadá (amazon.ca)</option>
-            </select>
+          <div class="amazon-grid amazon-grid-3">
+            <div class="field">
+              <label for="amazon-session-id">Cookie <code>session-id</code></label>
+              <input type="text" id="amazon-session-id" placeholder="Ex: 123-4567890-1234567" />
+            </div>
+            <div class="field">
+              <label for="amazon-ubid">Cookie <code id="label-ubid">ubid-acbbr</code></label>
+              <input type="text" id="amazon-ubid" placeholder="Ex: 123-4567890-1234567" />
+            </div>
+            <div class="field">
+              <label for="amazon-at">Cookie <code id="label-at">at-acbbr</code></label>
+              <input type="password" id="amazon-at" placeholder="Ex: Atza|IwEB..." />
+            </div>
           </div>
-          <div class="field">
-            <label for="amazon-session-id">Cookie <code>session-id</code></label>
-            <input type="text" id="amazon-session-id" placeholder="Ex: 123-4567890-1234567" />
-          </div>
-          <div class="field">
-            <label for="amazon-ubid">Cookie <code id="label-ubid">ubid-acbbr</code></label>
-            <input type="text" id="amazon-ubid" placeholder="Ex: 123-4567890-1234567" />
-          </div>
-          <div class="field">
-            <label for="amazon-at">Cookie <code id="label-at">at-acbbr</code></label>
-            <input type="password" id="amazon-at" placeholder="Ex: Atza|IwEB..." />
-          </div>
-        </div>
-
-        <div class="row actions">
           <label class="file-btn">
             <input type="file" id="amazon-cookies-file" accept=".json" />
             <span>📄 Carregar cookies.json</span>
           </label>
-          <button id="btn-amazon-preview" class="btn btn-secondary">🔍 Contar Biblioteca (Prévia)</button>
-          <button id="btn-amazon-download" class="btn btn-primary">⬇️ Baixar Todas as Fotos e Vídeos</button>
-          <button id="btn-amazon-stop" class="btn btn-danger hidden">⏸️ Pausar Download</button>
-        </div>
+        </details>
 
         <div id="amazon-progress-wrap" class="amazon-progress hidden">
           <div class="stats stats-4">

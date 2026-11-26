@@ -80,6 +80,55 @@ def run_cli(args: argparse.Namespace) -> int:
     return 0 if final_status["state"] == "completed" and summary["failed"] == 0 else 1
 
 
+def amazon_login_cli(args: argparse.Namespace) -> tuple[dict[str, str], str] | None:
+    """Faz login na Amazon pelo terminal (e-mail + senha) ou reutiliza a sessão salva."""
+    import getpass
+    import os
+
+    from app.amazon_login import AmazonLoginManager
+
+    manager = AmazonLoginManager()
+    if not args.amazon_relogin:
+        session = manager.get_session()
+        if session:
+            print(f"Usando a sessão Amazon salva ({manager.get_status()['email']}). "
+                  "Use --amazon-relogin para entrar com outra conta.")
+            return session
+
+    email = args.amazon_email or input("E-mail da Amazon: ").strip()
+    password = os.environ.get("AMAZON_PASSWORD") or getpass.getpass("Senha da Amazon: ")
+    manager.start(
+        email,
+        password,
+        domain=args.amazon_domain or "com.br",
+        show_browser=args.show_browser,
+    )
+
+    last_msg = None
+    try:
+        while manager.is_running():
+            st = manager.get_status()
+            if st["message"] != last_msg:
+                print(st["message"])
+                last_msg = st["message"]
+            if st["state"] == "need_otp":
+                code = input("Código de verificação: ").strip()
+                try:
+                    manager.submit_otp(code)
+                except (ValueError, RuntimeError) as exc:
+                    print(f"Erro: {exc}")
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        print("\nLogin cancelado.")
+        manager.cancel()
+        return None
+
+    st = manager.get_status()
+    if st["message"] != last_msg:
+        print(st["message"])
+    return manager.get_session() if st["logged_in"] else None
+
+
 def run_amazon_download_cli(args: argparse.Namespace) -> int:
     from pathlib import Path
 
@@ -89,17 +138,24 @@ def run_amazon_download_cli(args: argparse.Namespace) -> int:
         normalize_cookies,
     )
 
-    cookies_path = Path(args.amazon_cookies).expanduser()
-    if not cookies_path.is_file():
-        print(f"Erro: arquivo de cookies não encontrado em {cookies_path}")
-        return 1
+    if args.amazon_cookies:
+        cookies_path = Path(args.amazon_cookies).expanduser()
+        if not cookies_path.is_file():
+            print(f"Erro: arquivo de cookies não encontrado em {cookies_path}")
+            return 1
+        cookies = normalize_cookies(cookies_json=cookies_path.read_text(encoding="utf-8"))
+        domain = args.amazon_domain
+    else:
+        session = amazon_login_cli(args)
+        if not session:
+            return 1
+        cookies, domain = session
 
-    cookies = normalize_cookies(cookies_json=cookies_path.read_text(encoding="utf-8"))
     out_dir = Path(args.amazon_out).expanduser() if args.amazon_out else DEFAULT_AMAZON_DOWNLOAD_DIR
     downloader = AmazonLibraryDownloader(default_output_dir=out_dir)
     downloader.start(
         cookies,
-        domain=args.amazon_domain,
+        domain=domain,
         output_dir=out_dir,
         workers=args.workers,
         limit=args.limit,
@@ -122,6 +178,8 @@ def run_amazon_download_cli(args: argparse.Namespace) -> int:
     final = downloader.get_status()
     for line in final["logs"][last_log_count:]:
         print(line)
+    if final["state"] == "error" and not args.amazon_cookies:
+        print("Dica: se a sessão expirou, rode novamente com --amazon-relogin.")
     return 0 if final["state"] == "completed" and final["failed"] == 0 else 1
 
 
@@ -131,7 +189,10 @@ def main() -> int:
     )
     parser.add_argument("--cli", action="store_true", help="Executa em modo linha de comando.")
     parser.add_argument("--download-amazon", action="store_true", help="Baixa todas as fotos/vídeos do Amazon Photos de uma vez.")
-    parser.add_argument("--amazon-cookies", type=str, default="cookies.json", help="Arquivo cookies.json do Amazon Photos.")
+    parser.add_argument("--amazon-email", type=str, default=None, help="E-mail da conta Amazon (a senha é pedida no terminal ou lida de AMAZON_PASSWORD).")
+    parser.add_argument("--amazon-relogin", action="store_true", help="Ignora a sessão Amazon salva e faz login novamente.")
+    parser.add_argument("--show-browser", action="store_true", help="Mostra a janela do navegador durante o login da Amazon.")
+    parser.add_argument("--amazon-cookies", type=str, default=None, help="(Avançado) Usa um arquivo cookies.json em vez de e-mail e senha.")
     parser.add_argument("--amazon-domain", type=str, default=None, help="Domínio Amazon (ex: com.br, com, co.uk).")
     parser.add_argument("--amazon-out", type=str, default=None, help="Pasta de destino do download da Amazon.")
     parser.add_argument("--limit", type=int, default=None, help="Limita quantidade de itens no download da Amazon (teste).")
