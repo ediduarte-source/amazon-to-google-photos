@@ -126,6 +126,31 @@ $("credentials-file").addEventListener("change", async (ev) => {
   await refreshAuth();
 });
 
+async function copyText(text, feedbackEl, okMsg) {
+  try {
+    await navigator.clipboard.writeText(text);
+    if (feedbackEl) feedbackEl.textContent = okMsg;
+  } catch {
+    const tmp = document.createElement("textarea");
+    tmp.value = text;
+    document.body.appendChild(tmp);
+    tmp.select();
+    document.execCommand("copy");
+    document.body.removeChild(tmp);
+    if (feedbackEl) feedbackEl.textContent = okMsg;
+  }
+}
+
+document.querySelectorAll("[data-copy]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    copyText(
+      btn.getAttribute("data-copy"),
+      $("auth-message"),
+      "Link copiado! Cole em uma nova aba do navegador."
+    );
+  });
+});
+
 $("btn-auth-url").addEventListener("click", async () => {
   const resp = await fetch("/api/auth/start-url", { method: "POST" });
   const data = await resp.json();
@@ -133,9 +158,16 @@ $("btn-auth-url").addEventListener("click", async () => {
     $("auth-message").textContent = `Erro: ${data.detail}`;
     return;
   }
-  $("oauth-link").href = data.auth_url;
+  $("oauth-url-display").value = data.auth_url;
   $("oauth-code-box").classList.remove("hidden");
-  $("auth-message").textContent = "Abra o link azul acima, autorize o acesso e cole a URL retornada.";
+  $("auth-message").textContent = "Clique em 'Copiar Link', abra em uma nova aba do navegador e cole a URL retornada.";
+});
+
+$("btn-copy-oauth").addEventListener("click", () => {
+  const url = $("oauth-url-display").value;
+  if (url) {
+    copyText(url, $("auth-message"), "Link de autorização copiado! Abra em uma nova aba do navegador.");
+  }
 });
 
 $("btn-exchange-code").addEventListener("click", async () => {

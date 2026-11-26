@@ -257,6 +257,21 @@ body {
 .btn-danger { background: var(--err); color: #fff; }
 .btn-ghost { background: transparent; border-color: var(--border); color: var(--muted); }
 
+.btn-mini {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  margin-left: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #1e293b;
+  color: #93c5fd;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-mini:hover { background: #334155; }
+
 .file-btn {
   background: var(--surface-2);
   border-color: var(--border);

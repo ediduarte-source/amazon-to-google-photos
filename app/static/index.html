@@ -35,7 +35,11 @@
         <details class="guide">
           <summary>Como gerar o credentials.json em 2 minutos</summary>
           <ol>
-            <li>Acesse <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer">console.cloud.google.com</a> e crie um projeto (ex: <em>Migrador Fotos</em>).</li>
+            <li>
+              Abra <code>https://console.cloud.google.com/</code> em uma <strong>nova aba do navegador</strong>
+              <button type="button" class="btn-mini" data-copy="https://console.cloud.google.com/">📋 Copiar link</button>
+              e crie um projeto (ex: <em>Migrador Fotos</em>).
+            </li>
             <li>Em <strong>APIs e Serviços → Biblioteca</strong>, ative a <strong>Photos Library API</strong>.</li>
             <li>Em <strong>Tela de permissão OAuth</strong>, escolha <em>Externo</em> e adicione seu e-mail em <strong>Usuários de teste</strong>.</li>
             <li>Em <strong>Credenciais → Criar credenciais → ID do cliente OAuth</strong>, escolha <strong>App para computador</strong> e baixe o JSON.</li>
@@ -53,8 +57,14 @@
 
         <div id="oauth-code-box" class="oauth-box hidden">
           <p class="hint">
-            1. <a id="oauth-link" href="#" target="_blank" rel="noreferrer"><strong>Clique aqui para abrir o login do Google</strong></a> e permita o acesso.<br/>
-            2. Após autorizar, copie a URL da barra de endereços (<code>http://localhost/?code=...</code>) e cole abaixo:
+            <strong>1.</strong> Copie o link abaixo e abra em uma <strong>nova aba do seu navegador</strong> (o Google bloqueia login dentro de janelas embutidas):
+          </p>
+          <div class="row" style="margin-bottom: 10px;">
+            <input type="text" id="oauth-url-display" class="input-inline" readonly />
+            <button type="button" id="btn-copy-oauth" class="btn btn-secondary">📋 Copiar Link</button>
+          </div>
+          <p class="hint">
+            <strong>2.</strong> Após autorizar, copie a URL da barra de endereços (<code>http://localhost/?code=...</code>) e cole abaixo:
           </p>
           <div class="row">
             <input type="text" id="oauth-code-input" class="input-inline" placeholder="Cole aqui a URL completa ou o código..." />
