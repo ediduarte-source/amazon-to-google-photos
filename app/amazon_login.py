@@ -24,6 +24,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 from app.config import DATA_DIR
 
@@ -77,6 +78,17 @@ def _clean_domain(domain: str | None) -> str:
     for prefix in ("https://", "http://", "www.", "amazon."):
         value = value.removeprefix(prefix)
     return value.strip("/") or "com.br"
+
+
+def extract_amazon_domain(url: str | None, fallback: str = "com") -> str:
+    """Extrai o sufixo de domínio (ex: 'com', 'co.uk', 'com.br') de uma URL da Amazon."""
+    host = (urlparse(url or "").hostname or "").lower()
+    marker = "amazon."
+    idx = host.find(marker)
+    if idx == -1:
+        return fallback
+    extracted = host[idx + len(marker) :].strip(".")
+    return extracted or fallback
 
 
 def mask_email(email: str) -> str:
@@ -362,7 +374,9 @@ class AmazonLoginManager:
     def _run(self, email: str, password: str, domain: str, show_browser: bool) -> None:
         try:
             try:
-                cookies = self._attempt(email, password, domain, headless=not show_browser)
+                cookies, effective_domain = self._attempt(
+                    email, password, domain, headless=not show_browser
+                )
             except NeedsVisibleBrowser:
                 with self._lock:
                     self.status.visible_browser = True
@@ -371,25 +385,34 @@ class AmazonLoginManager:
                     "A Amazon pediu uma verificação de segurança. Abrindo uma janela do navegador "
                     "para você concluir (resolva a verificação na janela que abrir).",
                 )
-                cookies = self._attempt(email, password, domain, headless=False)
-            self._write_session(email, domain, cookies)
-            self._set("logged_in", f"Conectado à Amazon como {mask_email(email)}!")
+                cookies, effective_domain = self._attempt(email, password, domain, headless=False)
+            with self._lock:
+                self.status.domain = effective_domain
+            self._write_session(email, effective_domain, cookies)
+            self._set(
+                "logged_in",
+                f"Conectado à Amazon (amazon.{effective_domain}) como {mask_email(email)}!",
+            )
         except AmazonLoginError as exc:
             self._set("error", str(exc))
         except Exception as exc:  # pragma: no cover - proteção geral
             self._set("error", f"Erro inesperado no login da Amazon: {exc}")
 
-    def _attempt(self, email: str, password: str, domain: str, *, headless: bool) -> dict[str, str]:
+    def _attempt(
+        self, email: str, password: str, domain: str, *, headless: bool
+    ) -> tuple[dict[str, str], str]:
         context, page, close = self._browser_factory(headless, self.browser_state_path)
         try:
-            cookies = self._flow(context, page, email, password, domain, headless=headless)
+            cookies, effective_domain = self._flow(
+                context, page, email, password, domain, headless=headless
+            )
             try:
                 self.browser_state_path.parent.mkdir(parents=True, exist_ok=True)
                 context.storage_state(path=str(self.browser_state_path))
                 os.chmod(self.browser_state_path, 0o600)
             except Exception:
                 pass
-            return cookies
+            return cookies, effective_domain
         finally:
             try:
                 close()
@@ -408,34 +431,64 @@ class AmazonLoginManager:
 
     def _flow(
         self, context: Any, page: Any, email: str, password: str, domain: str, *, headless: bool
-    ) -> dict[str, str]:
-        base = self._base_url_template.format(domain=domain)
-        page.goto(f"{base}/photos/all")
+    ) -> tuple[dict[str, str], str]:
+        effective_domain = domain
+        base = self._base_url_template.format(domain=effective_domain)
+        resp = page.goto(f"{base}/photos/all")
         self._settle(page)
+        effective_domain = extract_amazon_domain(page.url, effective_domain)
 
         def current_cookies() -> dict[str, str]:
-            return cookies_for_domain(context.cookies(), domain)
+            return cookies_for_domain(context.cookies(), effective_domain)
+
+        # Alguns países (ex: Brasil / amazon.com.br) hospedam o Amazon Photos em amazon.com:
+        # /photos/all retorna 404 em amazon.com.br, mas /photos redireciona para o domínio real.
+        status_code = getattr(resp, "status", 200) if resp is not None else 200
+        if status_code >= 400 or (
+            detect_page_state(page, current_cookies()) == "unknown"
+            and not _visible(page, SIGNIN_LINK_SEL)
+        ):
+            page.goto(f"{base}/photos")
+            self._settle(page)
+            redirected = extract_amazon_domain(page.url, effective_domain)
+            if redirected != effective_domain:
+                effective_domain = redirected
+                with self._lock:
+                    self.status.domain = effective_domain
+                self._set(
+                    "logging_in",
+                    f"Amazon Photos desta região usa amazon.{effective_domain}. Abrindo tela de login...",
+                )
+                real_base = self._base_url_template.format(domain=effective_domain)
+                page.goto(f"{real_base}/photos/all")
+                self._settle(page)
 
         if detect_page_state(page, current_cookies()) == "unknown":
             link = _visible(page, SIGNIN_LINK_SEL)
             if link:
                 link.click()
                 self._settle(page)
+                effective_domain = extract_amazon_domain(page.url, effective_domain)
 
         deadline = time.time() + self._timeout
         password_submits = 0
         otp_attempts = 0
         email_submits = 0
+        unknown_since: float | None = None
         announced: str | None = None
 
         while time.time() < deadline:
             if self._cancel.is_set():
                 raise AmazonLoginError("Login cancelado.")
+            effective_domain = extract_amazon_domain(page.url, effective_domain)
             cookies = current_cookies()
             state = detect_page_state(page, cookies)
 
+            if state != "unknown":
+                unknown_since = None
+
             if state == "logged_in":
-                return cookies
+                return cookies, effective_domain
 
             if state == "captcha":
                 if headless:
@@ -528,6 +581,18 @@ class AmazonLoginManager:
                 continue
 
             # Página intermediária (redirecionamentos, carregamento do Amazon Photos...)
+            if unknown_since is None:
+                unknown_since = time.time()
+            elif headless and (time.time() - unknown_since) > 20:
+                title = ""
+                try:
+                    title = page.title() or ""
+                except Exception:
+                    pass
+                raise AmazonLoginError(
+                    f"A Amazon abriu uma tela não reconhecida ({title or page.url}). "
+                    "Tente novamente marcando 'Mostrar a janela do navegador' ou use o site 'Estados Unidos (amazon.com)'."
+                )
             self._sleep(self._poll)
 
         raise AmazonLoginError("Tempo esgotado aguardando o login da Amazon. Tente novamente.")

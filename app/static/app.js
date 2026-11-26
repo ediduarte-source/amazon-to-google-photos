@@ -85,23 +85,28 @@ async function amazonLogin() {
   }
   $("btn-amazon-login").disabled = true;
   $("amazon-login-message").textContent = "Entrando na Amazon...";
-  const resp = await fetch("/api/amazon/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email,
-      password,
-      domain: $("amazon-domain").value,
-      show_browser: $("amazon-show-browser").checked,
-    }),
-  });
-  const data = await resp.json();
-  if (!resp.ok) {
-    $("amazon-login-message").textContent = `Erro: ${data.detail}`;
+  try {
+    const resp = await fetch("/api/amazon/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        password,
+        domain: $("amazon-domain").value,
+        show_browser: $("amazon-show-browser").checked,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      $("amazon-login-message").textContent = `Erro: ${data.detail}`;
+      $("btn-amazon-login").disabled = false;
+      return;
+    }
+    await refreshAmazonLogin();
+  } catch (err) {
+    $("amazon-login-message").textContent = `Erro de conexão com o servidor local: ${err.message || err}`;
     $("btn-amazon-login").disabled = false;
-    return;
   }
-  await refreshAmazonLogin();
 }
 
 $("btn-amazon-login").addEventListener("click", amazonLogin);

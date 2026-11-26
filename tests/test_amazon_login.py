@@ -16,6 +16,7 @@ from app.amazon_login import (
     EMAIL_SEL,
     AmazonLoginManager,
     cookies_for_domain,
+    extract_amazon_domain,
     mask_email,
     playwright_browser_factory,
 )
@@ -163,6 +164,9 @@ def make_manager(tmp_path: Path, factory) -> AmazonLoginManager:
 
 def test_helpers() -> None:
     assert mask_email("eduardo@gmail.com") == "ed***@gmail.com"
+    assert extract_amazon_domain("https://www.amazon.com/photos/all", "com.br") == "com"
+    assert extract_amazon_domain("https://www.amazon.co.uk/ap/signin", "com") == "co.uk"
+    assert extract_amazon_domain("http://127.0.0.1:8000/photos", "com.br") == "com.br"
     raw = [
         {"name": "session-id", "value": "1", "domain": ".amazon.com.br"},
         {"name": "at-acbbr", "value": "2", "domain": "www.amazon.com.br"},
