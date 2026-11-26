@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""Ponto de entrada da aplicação: interface web local ou modo CLI."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import threading
+import time
+import webbrowser
+
+import uvicorn
+
+from app.config import (
+    DEFAULT_ALBUM_NAME,
+    DEFAULT_CREDENTIALS_PATH,
+    DEFAULT_DB_PATH,
+    DEFAULT_EXTRACT_DIR,
+    DEFAULT_TOKEN_PATH,
+    DEFAULT_UPLOAD_WORKERS,
+)
+from app.google_photos import GooglePhotosClient
+from app.migrator import PhotoMigrator
+from app.state import MigrationStateStore
+
+
+def run_cli(args: argparse.Namespace) -> int:
+    store = MigrationStateStore(DEFAULT_DB_PATH)
+    client = GooglePhotosClient(
+        credentials_path=DEFAULT_CREDENTIALS_PATH,
+        token_path=DEFAULT_TOKEN_PATH,
+    )
+
+    if not args.dry_run and not client.is_authenticated():
+        if not client.has_client_secrets():
+            print(
+                f"Erro: coloque seu arquivo credentials.json em {DEFAULT_CREDENTIALS_PATH}\n"
+                "Veja as instruções no README.md."
+            )
+            return 1
+        print("Abrindo navegador para autenticar sua conta Google...")
+        client.authenticate_interactive(port=0)
+
+    migrator = PhotoMigrator(
+        store,
+        client,
+        extract_dir=DEFAULT_EXTRACT_DIR,
+        workers=args.workers,
+    )
+    migrator.start(
+        args.source,
+        args.album,
+        dry_run=args.dry_run,
+        retry_failed=args.retry_failed,
+    )
+
+    last_log_count = 0
+    try:
+        while migrator.is_running():
+            status = migrator.get_status(args.album)
+            logs = status["logs"]
+            for line in logs[last_log_count:]:
+                print(line)
+            last_log_count = len(logs)
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        print("\nInterrupção solicitada. Pausando com segurança...")
+        migrator.stop()
+        migrator.wait()
+
+    final_status = migrator.get_status(args.album)
+    for line in final_status["logs"][last_log_count:]:
+        print(line)
+
+    summary = final_status["summary"]
+    print(
+        f"\nResumo ({args.album}): total={summary['total']} | "
+        f"enviadas={summary['uploaded']} | pendentes={summary['pending']} | falhas={summary['failed']}"
+    )
+    return 0 if final_status["state"] == "completed" and summary["failed"] == 0 else 1
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Migrador de fotos do Amazon Photos para o Google Fotos (álbum Porta Retrato)."
+    )
+    parser.add_argument("--cli", action="store_true", help="Executa em modo linha de comando.")
+    parser.add_argument("--source", type=str, help="Pasta local ou arquivo .zip baixado do Amazon Photos.")
+    parser.add_argument(
+        "--album",
+        type=str,
+        default=DEFAULT_ALBUM_NAME,
+        help=f"Nome do álbum de destino no Google Fotos (padrão: '{DEFAULT_ALBUM_NAME}').",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="Apenas simula e conta os arquivos sem enviar.")
+    parser.add_argument("--retry-failed", action="store_true", help="Tenta reenviar itens que falharam antes.")
+    parser.add_argument("--workers", type=int, default=DEFAULT_UPLOAD_WORKERS, help="Uploads paralelos (1-8).")
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host do servidor web local.")
+    parser.add_argument("--port", type=int, default=8765, help="Porta do servidor web local.")
+    parser.add_argument("--no-browser", action="store_true", help="Não abre o navegador automaticamente.")
+
+    args = parser.parse_args()
+
+    if args.cli:
+        if not args.source:
+            parser.error("No modo --cli é obrigatório informar --source <pasta_ou_zip>.")
+        return run_cli(args)
+
+    url = f"http://{args.host}:{args.port}"
+    print(f"Iniciando interface web em {url}")
+    if not args.no_browser:
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+
+    uvicorn.run("app.server:app", host=args.host, port=args.port, reload=False)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

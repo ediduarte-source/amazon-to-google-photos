@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Amazon Photos → Google Fotos (Porta Retrato)</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="brand">
+        <div class="logo">🖼️</div>
+        <div>
+          <h1>Amazon Photos → Google Fotos</h1>
+          <p class="subtitle">Migração amigável com retomada automática e deduplicação para o álbum <strong>Porta Retrato</strong>.</p>
+        </div>
+      </div>
+      <span id="global-badge" class="badge badge-idle">Pronto</span>
+    </header>
+
+    <main class="grid">
+      <!-- Passo 1: Google OAuth -->
+      <section class="card">
+        <div class="card-header">
+          <span class="step-num">1</span>
+          <h2>Conectar ao Google Fotos</h2>
+          <span id="auth-badge" class="badge badge-warn">Desconectado</span>
+        </div>
+
+        <p class="hint">
+          Carregue o arquivo <code>credentials.json</code> (OAuth App para Computador) do Google Cloud e autorize sua conta Google.
+        </p>
+
+        <details class="guide">
+          <summary>Como gerar o credentials.json em 2 minutos</summary>
+          <ol>
+            <li>Acesse <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer">console.cloud.google.com</a> e crie um projeto (ex: <em>Migrador Fotos</em>).</li>
+            <li>Em <strong>APIs e Serviços → Biblioteca</strong>, ative a <strong>Photos Library API</strong>.</li>
+            <li>Em <strong>Tela de permissão OAuth</strong>, escolha <em>Externo</em> e adicione seu e-mail em <strong>Usuários de teste</strong>.</li>
+            <li>Em <strong>Credenciais → Criar credenciais → ID do cliente OAuth</strong>, escolha <strong>App para computador</strong> e baixe o JSON.</li>
+          </ol>
+        </details>
+
+        <div class="row">
+          <label class="file-btn">
+            <input type="file" id="credentials-file" accept=".json" />
+            <span>📄 Carregar credentials.json</span>
+          </label>
+          <button id="btn-auth-url" class="btn btn-primary" disabled>🔑 Autorizar Google</button>
+          <button id="btn-disconnect" class="btn btn-ghost hidden">Desconectar</button>
+        </div>
+
+        <div id="oauth-code-box" class="oauth-box hidden">
+          <p class="hint">
+            1. <a id="oauth-link" href="#" target="_blank" rel="noreferrer"><strong>Clique aqui para abrir o login do Google</strong></a> e permita o acesso.<br/>
+            2. Após autorizar, copie a URL da barra de endereços (<code>http://localhost/?code=...</code>) e cole abaixo:
+          </p>
+          <div class="row">
+            <input type="text" id="oauth-code-input" class="input-inline" placeholder="Cole aqui a URL completa ou o código..." />
+            <button id="btn-exchange-code" class="btn btn-primary">Confirmar</button>
+          </div>
+        </div>
+
+        <p id="auth-message" class="status-line"></p>
+      </section>
+
+      <!-- Passo 2: Origem e Álbum -->
+      <section class="card">
+        <div class="card-header">
+          <span class="step-num">2</span>
+          <h2>Fotos do Amazon Photos e Álbum</h2>
+        </div>
+
+        <div id="dropzone" class="dropzone">
+          <input type="file" id="media-upload-input" multiple accept=".zip,image/*,video/*" />
+          <div class="dropzone-icon">☁️⬆️</div>
+          <p><strong>Arraste seus arquivos .zip ou fotos do Amazon Photos aqui</strong></p>
+          <small>ou clique para selecionar no seu computador (suporta múltiplos ZIPs, JPG, PNG, HEIC, MP4, MOV)</small>
+        </div>
+
+        <div class="divider"><span>ou informe uma pasta local</span></div>
+
+        <div class="field">
+          <label for="source-path">Caminho da pasta ou .zip</label>
+          <input
+            type="text"
+            id="source-path"
+            placeholder="Preenchido automaticamente ao enviar arquivos acima, ou digite um caminho..."
+          />
+        </div>
+
+        <div class="field">
+          <label for="album-name">Álbum de destino no Google Fotos</label>
+          <input type="text" id="album-name" value="Porta Retrato" />
+        </div>
+
+        <label class="checkbox">
+          <input type="checkbox" id="retry-failed" />
+          <span>Tentar reenviar arquivos que falharam anteriormente</span>
+        </label>
+
+        <div class="row actions">
+          <button id="btn-scan" class="btn btn-secondary">🔍 Analisar (Prévia)</button>
+          <button id="btn-start" class="btn btn-primary">🚀 Iniciar Migração</button>
+          <button id="btn-stop" class="btn btn-danger hidden">⏸️ Pausar</button>
+        </div>
+        <p id="action-message" class="status-line"></p>
+      </section>
+
+      <!-- Painel de Progresso -->
+      <section class="card card-full">
+        <div class="card-header">
+          <span class="step-num">3</span>
+          <h2>Progresso da Migração</h2>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <span class="stat-label">Total</span>
+            <strong id="stat-total">0</strong>
+          </div>
+          <div class="stat stat-ok">
+            <span class="stat-label">Enviadas</span>
+            <strong id="stat-uploaded">0</strong>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Pendentes</span>
+            <strong id="stat-pending">0</strong>
+          </div>
+          <div class="stat stat-err">
+            <span class="stat-label">Falhas</span>
+            <strong id="stat-failed">0</strong>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Tamanho</span>
+            <strong id="stat-size">0 MB</strong>
+          </div>
+        </div>
+
+        <div class="progress-track">
+          <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+        </div>
+        <div class="progress-meta">
+          <span id="progress-text">0% concluído</span>
+          <span id="runtime-msg">Pronto para iniciar.</span>
+        </div>
+
+        <div class="split">
+          <div>
+            <h3>Log em tempo real</h3>
+            <pre id="log-box" class="log-box">Aguardando início...</pre>
+          </div>
+          <div>
+            <h3>Últimos arquivos processados</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Arquivo</th>
+                    <th>Tamanho</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="recent-tbody">
+                  <tr><td colspan="3" class="muted">Nenhum arquivo listado ainda.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
