@@ -13,17 +13,98 @@
         <div class="logo">🖼️</div>
         <div>
           <h1>Amazon Photos → Google Fotos</h1>
-          <p class="subtitle">Migração amigável com retomada automática e deduplicação para o álbum <strong>Porta Retrato</strong>.</p>
+          <p class="subtitle">Baixe todas as fotos e vídeos da Amazon de uma vez e migre para o álbum <strong>Porta Retrato</strong> sem duplicatas.</p>
         </div>
       </div>
       <span id="global-badge" class="badge badge-idle">Pronto</span>
     </header>
 
     <main class="grid">
-      <!-- Passo 1: Google OAuth -->
-      <section class="card">
+      <!-- Passo 1: Baixar tudo do Amazon Photos de uma vez -->
+      <section class="card card-full">
         <div class="card-header">
           <span class="step-num">1</span>
+          <h2>Baixar todas as fotos e vídeos do Amazon Photos de uma vez</h2>
+          <span id="amazon-badge" class="badge badge-idle">Pronto</span>
+        </div>
+
+        <p class="hint">
+          Baixa toda a sua biblioteca (fotos e vídeos originais) em paralelo, valida o checksum MD5, ignora duplicatas e permite pausar/retomar. Ao concluir, a pasta é preenchida automaticamente para migração no Google Fotos.
+        </p>
+
+        <details class="guide">
+          <summary>Como copiar os 3 cookies da sua sessão do Amazon Photos (1 minuto)</summary>
+          <ol>
+            <li>
+              Abra <code>https://www.amazon.com.br/photos</code> em uma <strong>nova aba do navegador</strong>
+              <button type="button" class="btn-mini" data-copy="https://www.amazon.com.br/photos">📋 Copiar link</button>
+              e faça login na sua conta Amazon.
+            </li>
+            <li>Pressione <strong>F12</strong> (ou <em>Cmd+Option+I</em> no Mac) → aba <strong>Application</strong> (Chrome/Edge) ou <strong>Storage</strong> (Firefox) → <strong>Cookies</strong> → <code>https://www.amazon.com.br</code>.</li>
+            <li>Copie os valores dos cookies <code>session-id</code>, <code>ubid-acbbr</code> (ou <code>ubid-main</code> se usar amazon.com) e <code>at-acbbr</code> (ou <code>at-main</code>) nos campos abaixo, ou carregue um arquivo <code>cookies.json</code>.</li>
+          </ol>
+        </details>
+
+        <div class="amazon-grid">
+          <div class="field">
+            <label for="amazon-domain">Site da Amazon</label>
+            <select id="amazon-domain">
+              <option value="com.br" selected>Brasil (amazon.com.br)</option>
+              <option value="com">Estados Unidos (amazon.com)</option>
+              <option value="co.uk">Reino Unido (amazon.co.uk)</option>
+              <option value="de">Alemanha (amazon.de)</option>
+              <option value="es">Espanha (amazon.es)</option>
+              <option value="fr">França (amazon.fr)</option>
+              <option value="it">Itália (amazon.it)</option>
+              <option value="ca">Canadá (amazon.ca)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="amazon-session-id">Cookie <code>session-id</code></label>
+            <input type="text" id="amazon-session-id" placeholder="Ex: 123-4567890-1234567" />
+          </div>
+          <div class="field">
+            <label for="amazon-ubid">Cookie <code id="label-ubid">ubid-acbbr</code></label>
+            <input type="text" id="amazon-ubid" placeholder="Ex: 123-4567890-1234567" />
+          </div>
+          <div class="field">
+            <label for="amazon-at">Cookie <code id="label-at">at-acbbr</code></label>
+            <input type="password" id="amazon-at" placeholder="Ex: Atza|IwEB..." />
+          </div>
+        </div>
+
+        <div class="row actions">
+          <label class="file-btn">
+            <input type="file" id="amazon-cookies-file" accept=".json" />
+            <span>📄 Carregar cookies.json</span>
+          </label>
+          <button id="btn-amazon-preview" class="btn btn-secondary">🔍 Contar Biblioteca (Prévia)</button>
+          <button id="btn-amazon-download" class="btn btn-primary">⬇️ Baixar Todas as Fotos e Vídeos</button>
+          <button id="btn-amazon-stop" class="btn btn-danger hidden">⏸️ Pausar Download</button>
+        </div>
+
+        <div id="amazon-progress-wrap" class="amazon-progress hidden">
+          <div class="stats stats-4">
+            <div class="stat"><span class="stat-label">Encontrados</span><strong id="amz-found">0</strong></div>
+            <div class="stat stat-ok"><span class="stat-label">Baixados</span><strong id="amz-done">0</strong></div>
+            <div class="stat stat-err"><span class="stat-label">Falhas</span><strong id="amz-failed">0</strong></div>
+            <div class="stat"><span class="stat-label">Volume</span><strong id="amz-size">0 MB</strong></div>
+          </div>
+          <div class="progress-track">
+            <div id="amz-progress-bar" class="progress-bar" style="width: 0%"></div>
+          </div>
+          <div class="progress-meta">
+            <span id="amz-progress-text">0%</span>
+            <span id="amz-runtime-msg"></span>
+          </div>
+        </div>
+        <p id="amazon-message" class="status-line"></p>
+      </section>
+
+      <!-- Passo 2: Google OAuth -->
+      <section class="card">
+        <div class="card-header">
+          <span class="step-num">2</span>
           <h2>Conectar ao Google Fotos</h2>
           <span id="auth-badge" class="badge badge-warn">Desconectado</span>
         </div>
@@ -75,28 +156,26 @@
         <p id="auth-message" class="status-line"></p>
       </section>
 
-      <!-- Passo 2: Origem e Álbum -->
+      <!-- Passo 3: Origem e Álbum -->
       <section class="card">
         <div class="card-header">
-          <span class="step-num">2</span>
-          <h2>Fotos do Amazon Photos e Álbum</h2>
+          <span class="step-num">3</span>
+          <h2>Enviar para o Google Fotos</h2>
         </div>
 
         <div id="dropzone" class="dropzone">
           <input type="file" id="media-upload-input" multiple accept=".zip,image/*,video/*" />
           <div class="dropzone-icon">☁️⬆️</div>
-          <p><strong>Arraste seus arquivos .zip ou fotos do Amazon Photos aqui</strong></p>
-          <small>ou clique para selecionar no seu computador (suporta múltiplos ZIPs, JPG, PNG, HEIC, MP4, MOV)</small>
+          <p><strong>Arraste arquivos .zip ou fotos aqui (opcional)</strong></p>
+          <small>Se você baixou pelo Passo 1 acima, a pasta já será preenchida automaticamente.</small>
         </div>
 
-        <div class="divider"><span>ou informe uma pasta local</span></div>
-
-        <div class="field">
-          <label for="source-path">Caminho da pasta ou .zip</label>
+        <div class="field" style="margin-top: 12px;">
+          <label for="source-path">Pasta de origem (preenchida automaticamente após o Passo 1)</label>
           <input
             type="text"
             id="source-path"
-            placeholder="Preenchido automaticamente ao enviar arquivos acima, ou digite um caminho..."
+            placeholder="Ex: data/amazon_downloads ou caminho local..."
           />
         </div>
 
@@ -121,8 +200,8 @@
       <!-- Painel de Progresso -->
       <section class="card card-full">
         <div class="card-header">
-          <span class="step-num">3</span>
-          <h2>Progresso da Migração</h2>
+          <span class="step-num">4</span>
+          <h2>Progresso da Migração para o Google Fotos</h2>
         </div>
 
         <div class="stats">

@@ -279,9 +279,114 @@ $("btn-stop").addEventListener("click", async () => {
   await refreshMigrationStatus();
 });
 
+// ---- Amazon Photos Bulk Downloader ----
+const DOMAIN_LABELS = {
+  com: ["ubid-main", "at-main"],
+  "com.br": ["ubid-acbbr", "at-acbbr"],
+  "co.uk": ["ubid-acbuk", "at-acbuk"],
+  de: ["ubid-acbde", "at-acbde"],
+  es: ["ubid-acbes", "at-acbes"],
+  fr: ["ubid-acbfr", "at-acbfr"],
+  it: ["ubid-acbit", "at-acbit"],
+  ca: ["ubid-acbca", "at-acbca"],
+};
+
+let uploadedCookiesJson = null;
+
+$("amazon-domain").addEventListener("change", () => {
+  const [ubidName, atName] = DOMAIN_LABELS[$("amazon-domain").value] || ["ubid-acbbr", "at-acbbr"];
+  $("label-ubid").textContent = ubidName;
+  $("label-at").textContent = atName;
+});
+
+$("amazon-cookies-file").addEventListener("change", async (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  uploadedCookiesJson = await file.text();
+  $("amazon-message").textContent = `Arquivo '${file.name}' carregado! Clique em 'Contar Biblioteca' ou 'Baixar Todas as Fotos e Vídeos'.`;
+});
+
+async function startAmazonDownload(dryRun) {
+  const payload = {
+    domain: $("amazon-domain").value,
+    session_id: $("amazon-session-id").value.trim() || null,
+    ubid: $("amazon-ubid").value.trim() || null,
+    at_token: $("amazon-at").value.trim() || null,
+    cookies_json: uploadedCookiesJson,
+    album_name: $("album-name").value.trim() || "Porta Retrato",
+    dry_run: dryRun,
+  };
+  $("amazon-message").textContent = dryRun
+    ? "Conectando ao Amazon Photos para contar sua biblioteca..."
+    : "Iniciando download de todas as fotos e vídeos do Amazon Photos...";
+
+  const resp = await fetch("/api/amazon/download/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    $("amazon-message").textContent = `Erro: ${data.detail}`;
+    return;
+  }
+  await refreshAmazonStatus();
+}
+
+$("btn-amazon-preview").addEventListener("click", () => startAmazonDownload(true));
+$("btn-amazon-download").addEventListener("click", () => startAmazonDownload(false));
+$("btn-amazon-stop").addEventListener("click", async () => {
+  await fetch("/api/amazon/download/stop", { method: "POST" });
+  $("amazon-message").textContent = "Pausa solicitada...";
+  await refreshAmazonStatus();
+});
+
+async function refreshAmazonStatus() {
+  const resp = await fetch("/api/amazon/download/status");
+  const data = await resp.json();
+
+  const stateMap = {
+    idle: ["Pronto", "badge-idle"],
+    listing: ["Listando...", "badge-run"],
+    downloading: ["Baixando...", "badge-run"],
+    paused: ["Pausado", "badge-warn"],
+    completed: ["Concluído", "badge-ok"],
+    error: ["Erro", "badge-err"],
+  };
+  const [label, cls] = stateMap[data.state] || [data.state, "badge-idle"];
+  const badge = $("amazon-badge");
+  badge.textContent = label;
+  badge.className = `badge ${cls}`;
+
+  const active = data.state === "listing" || data.state === "downloading";
+  $("btn-amazon-preview").disabled = active;
+  $("btn-amazon-download").disabled = active;
+  $("btn-amazon-stop").classList.toggle("hidden", !active);
+
+  if (data.state !== "idle") {
+    $("amazon-progress-wrap").classList.remove("hidden");
+    $("amz-found").textContent = data.total_found || 0;
+    $("amz-done").textContent = (data.already_downloaded || 0) + (data.downloaded || 0);
+    $("amz-failed").textContent = data.failed || 0;
+    $("amz-size").textContent = formatBytes(data.total_bytes || 0);
+
+    const totalTodo = data.to_download || 0;
+    const pct = totalTodo ? Math.round(((data.downloaded || 0) / totalTodo) * 100) : (data.state === "completed" ? 100 : 0);
+    $("amz-progress-bar").style.width = `${pct}%`;
+    $("amz-progress-text").textContent = `${pct}%`;
+    $("amz-runtime-msg").textContent = data.message || "";
+
+    if (data.state === "completed" && !data.dry_run && data.output_dir && !$("source-path").value.trim()) {
+      $("source-path").value = data.output_dir;
+    }
+  }
+}
+
 refreshAuth();
 refreshMigrationStatus();
+refreshAmazonStatus();
 setInterval(() => {
   refreshAuth();
   refreshMigrationStatus();
+  refreshAmazonStatus();
 }, 2000);

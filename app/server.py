@@ -11,6 +11,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from app.amazon_downloader import (
+    DEFAULT_AMAZON_DOWNLOAD_DIR,
+    AmazonLibraryDownloader,
+    normalize_cookies,
+)
 from app.config import (
     DATA_DIR,
     DEFAULT_ALBUM_NAME,
@@ -42,6 +47,19 @@ class AuthCodeRequest(BaseModel):
     code_or_url: str = Field(..., min_length=1)
 
 
+class AmazonDownloadStartRequest(BaseModel):
+    domain: str = Field(default="com.br")
+    session_id: str | None = None
+    ubid: str | None = None
+    at_token: str | None = None
+    cookies_json: str | None = None
+    output_dir: str | None = None
+    album_name: str = Field(default=DEFAULT_ALBUM_NAME)
+    workers: int = Field(default=8, ge=1, le=16)
+    limit: int | None = Field(default=None, ge=1)
+    dry_run: bool = False
+
+
 def create_app(
     *,
     db_path: Path = DEFAULT_DB_PATH,
@@ -49,8 +67,9 @@ def create_app(
     token_path: Path = DEFAULT_TOKEN_PATH,
     extract_dir: Path = DEFAULT_EXTRACT_DIR,
     uploads_dir: Path | None = None,
+    amazon_download_dir: Path = DEFAULT_AMAZON_DOWNLOAD_DIR,
 ) -> FastAPI:
-    app = FastAPI(title="Amazon Photos → Google Fotos (Porta Retrato)", version="1.1.0")
+    app = FastAPI(title="Amazon Photos → Google Fotos (Porta Retrato)", version="1.2.0")
 
     upload_root = uploads_dir or (DATA_DIR / "uploads")
     upload_root.mkdir(parents=True, exist_ok=True)
@@ -58,6 +77,7 @@ def create_app(
     state_store = MigrationStateStore(db_path)
     google_client = GooglePhotosClient(credentials_path=credentials_path, token_path=token_path)
     migrator = PhotoMigrator(state_store, google_client, extract_dir=extract_dir)
+    amazon_downloader = AmazonLibraryDownloader(default_output_dir=amazon_download_dir)
 
     oauth_lock = threading.Lock()
     oauth_state = {"in_progress": False, "last_error": None}
@@ -196,6 +216,40 @@ def create_app(
     @app.get("/api/migrate/status")
     def migration_status(album_name: str | None = None) -> dict:
         return migrator.get_status(album_name)
+
+    @app.post("/api/amazon/download/start")
+    def start_amazon_download(req: AmazonDownloadStartRequest) -> dict:
+        try:
+            cookies = normalize_cookies(
+                cookies_json=req.cookies_json,
+                session_id=req.session_id,
+                ubid=req.ubid,
+                at_token=req.at_token,
+                domain=req.domain,
+            )
+            amazon_downloader.start(
+                cookies,
+                domain=req.domain,
+                output_dir=req.output_dir,
+                workers=req.workers,
+                limit=req.limit,
+                dry_run=req.dry_run,
+                on_complete=lambda out_dir: migrator.scan_only(str(out_dir), req.album_name),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"ok": True, "status": amazon_downloader.get_status()}
+
+    @app.post("/api/amazon/download/stop")
+    def stop_amazon_download() -> dict:
+        amazon_downloader.stop()
+        return {"ok": True, "status": amazon_downloader.get_status()}
+
+    @app.get("/api/amazon/download/status")
+    def amazon_download_status() -> dict:
+        return amazon_downloader.get_status()
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     return app

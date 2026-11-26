@@ -4,8 +4,9 @@ Aplicação local (interface web + linha de comando) para migrar fotos e vídeos
 
 ## Recursos
 
+- **Download em massa do Amazon Photos de uma vez**: baixa todas as fotos e vídeos da sua biblioteca Amazon Photos em paralelo usando os 3 cookies da sua sessão do navegador (`session-id`, `ubid-acbbr`, `at-acbbr`), com validação MD5, preservação da data da foto, deduplicação e retomada automática.
 - **Álbum automático (`Porta Retrato`)**: cria o álbum no Google Fotos na primeira execução e o reutiliza automaticamente em retomadas.
-- **Suporte a pastas e arquivos `.zip`**: aponte para uma pasta baixada pelo *Amazon Photos Desktop* ou diretamente para os arquivos `.zip` baixados pelo navegador (extração segura incluída).
+- **Suporte a pastas e arquivos `.zip`**: aponte para uma pasta baixada pelo *Amazon Photos Desktop*, pelo Passo 1 do app ou diretamente para arquivos `.zip` baixados pelo navegador (extração segura incluída).
 - **Retomada sem duplicatas**: usa banco SQLite local (`data/migration_state.db`) com hash **SHA-256** de cada arquivo — se a internet cair ou você pausar, basta continuar de onde parou.
 - **Upload paralelo + `batchCreate` em lote**: segue as boas práticas oficiais da Google Photos Library API (upload de bytes em paralelo, criação em lotes de até 50 itens e *backoff* automático em caso de erro temporário / limite de taxa).
 - **Escopos atualizados da API**: usa `photoslibrary.appendonly` e `photoslibrary.readonly.appcreateddata` (compatível com as mudanças da Google Photos Library API).
