@@ -61,6 +61,48 @@ O navegador abrirá automaticamente em `http://127.0.0.1:8765`:
 3. Mantenha o álbum como **Porta Retrato** (ou altere se desejar).
 4. Clique em **Analisar Pasta (Prévia)** para conferir a quantidade de arquivos e depois em **Iniciar Migração**.
 
+### Baixar TODAS as fotos do Amazon Photos de uma vez
+
+Não precisa de credenciais Google para esta etapa — apenas dos cookies da sua sessão Amazon.
+
+**1. Copie os 3 cookies da sua sessão** (1 minuto):
+
+1. Faça login em https://www.amazon.com.br/photos no navegador.
+2. Pressione **F12** → aba **Application** (Chrome/Edge) ou **Storage** (Firefox) → **Cookies** → `https://www.amazon.com.br`.
+3. Copie os valores de `session-id`, `ubid-acbbr` e `at-acbbr` (em amazon.com são `ubid-main` e `at-main`).
+
+> [!CAUTION]
+> Esses cookies dão acesso à sua conta Amazon. Não compartilhe com ninguém e não faça commit do `cookies.json`.
+
+**2a. Pela interface web:** rode `python run.py`, preencha os cookies no **Passo 1** e clique em **⬇️ Baixar Todas as Fotos e Vídeos**.
+
+**2b. Pela linha de comando:** crie um `cookies.json`:
+
+```json
+{
+  "session-id": "123-4567890-1234567",
+  "ubid-acbbr": "123-4567890-1234567",
+  "at-acbbr": "Atza|IwEB..."
+}
+```
+
+e execute:
+
+```bash
+# Apenas conta quantos itens existem na biblioteca
+python run.py --download-amazon --amazon-cookies cookies.json --dry-run
+
+# Baixa tudo (8 downloads em paralelo) para a pasta escolhida
+python run.py --download-amazon --amazon-cookies cookies.json --amazon-out ~/AmazonPhotos --workers 8
+```
+
+O que o downloader faz:
+- Lista toda a biblioteca (fotos **e** vídeos) e baixa em paralelo (até 16 simultâneos).
+- Valida cada arquivo pelo **MD5** da Amazon e remove duplicatas.
+- Preserva a data original da foto no arquivo.
+- **Retomada automática**: se cair a internet, você pausar (Ctrl+C) ou os cookies expirarem, rode de novo — os arquivos já baixados são pulados.
+- Pasta padrão: `data/amazon_downloads/`.
+
 ### Opção 2: Linha de Comando (CLI)
 
 Coloque o arquivo `credentials.json` em `data/credentials.json` e execute:
